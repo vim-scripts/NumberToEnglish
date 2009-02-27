@@ -1,0 +1,16 @@
+This is a mirror of http://www.vim.org/scripts/script.php?script_id=2561
+
+Converts a number (such as -1234) to English (negative one thousand two hundred thirty four); handles the biggest integer Vim can work with (billions).
+
+This actually figures out the English value by crunching the numbers (not through abbreviations) and thus doesn't have any startup overhead.
+
+Usage: call the function NumberToEnglish and pass it the number; optionally, a second parameter can be passed in which, if not 1, will cause the return
+value's first letter to be capitalized (Two hundred thirty four vs. two hundred thirty four).
+
+Two insert-mode mappings have been provided for convenience to make this happen on the currently typed number while typing.
+
+<Plug>NumberToEnglish: converts the (positive only) number to English
+
+<Plug>CNumberToEnglish: converts the (positive only) number to English, capitalizing the first letter
+
+Two identical version of these mappings that start with a D (for "Detailed") will append the original number in parentheses after the expansion.
