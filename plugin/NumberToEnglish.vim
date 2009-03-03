@@ -1,6 +1,20 @@
 " -*- vim -*-
 " (C) 2009 by Salman Halim, <salmanhalim AT gmail DOT com>
 
+" Version 1.2
+"
+" Added two new mappings:
+"
+" <Plug>DNumberToEnglish and <Plug>DCNumberToEnglish -- the D is short for "Detailed".
+"
+" Differs from the versions without the D in that it places the original number at the end of the expanded version:
+"
+" Thus, 12341234 becomes twelve million three hundred forty one thousand two hundred thirty four (12341234).
+"
+" Version 1.1
+"
+" Took the hard-coded values out of the functions into script-local variables -- no sense defining them every time.
+"
 " Version 1.0
 "
 " Converts a number (such as -1234) to English (negative one thousand two hundred thirty four); handles the biggest integer Vim can work with (billions).
@@ -22,7 +36,9 @@
 " imap <leader>nE <Plug>CNumberToEnglish
 
 imap <Plug>NumberToEnglish <c-o>diw<c-r>=NumberToEnglish( '<c-r>*' )<cr>
+imap <Plug>DNumberToEnglish <c-o>diw<c-r>=NumberToEnglish( '<c-r>*' )<cr> (<c-r>*)
 imap <Plug>CNumberToEnglish <c-o>diw<c-r>=NumberToEnglish( '<c-r>*', 1 )<cr>
+imap <Plug>DCNumberToEnglish <c-o>diw<c-r>=NumberToEnglish( '<c-r>*', 1 )<cr> (<c-r>*)
 
 " Concatenates two strings, placing a space between them if neither is
 " empty; if either is empty, the result is simply the non-empty one; if
@@ -45,15 +61,17 @@ function! <SID>AddWithSpace( original, addition )
   return result
 endfunction
 
+let s:digits = [ "", "one",    "two",    "three",    "four",     "five",    "six",     "seven",     "eight",    "nine" ]
+let s:teens  = [ "", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen" ]
+let s:tens   = [ "", "ten",    "twenty", "thirty",   "forty",    "fifty",   "sixty",   "seventy",   "eighty",   "ninety" ]
+
+let s:scale = [ "", "thousand", "million", "billion" ]
+
 " Converts a number between 1 and 999 to its English equivalent.
 " Anything else (such as 0 or 1000) gets the empty string.
 function! SmallNumberToEnglish( num )
   " We ignore the 0-based position so we don't have to keep
   " subtracting from our results when we look a number up here.
-  let digits = [ "", "one",    "two",    "three",    "four",     "five",    "six",     "seven",     "eight",    "nine" ]
-  let teens  = [ "", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen" ]
-  let tens   = [ "", "ten",    "twenty", "thirty",   "forty",    "fifty",   "sixty",   "seventy",   "eighty",   "ninety" ]
-
   let theNum = a:num
 
   let result = ""
@@ -62,7 +80,7 @@ function! SmallNumberToEnglish( num )
     let digit = theNum / 100
 
     if ( digit > 0 )
-      let result = <SID>AddWithSpace( result, digits[ digit ] . " hundred" )
+      let result = <SID>AddWithSpace( result, s:digits[ digit ] . " hundred" )
     endif
 
     let theNum = theNum % 100
@@ -72,19 +90,19 @@ function! SmallNumberToEnglish( num )
     if ( theNum > 0 )
       if ( theNum < 10 )
         " Single digit
-        let result = <SID>AddWithSpace( result, digits[ theNum ] )
+        let result = <SID>AddWithSpace( result, s:digits[ theNum ] )
       elseif ( theNum > 10 && theNum < 20 )
         " Teens
-        let result = <SID>AddWithSpace( result, teens[ theNum - 10 ] )
+        let result = <SID>AddWithSpace( result, s:teens[ theNum - 10 ] )
       else
         " Regular two-digit number; either 10 or between 20 and 99.
         let digit = theNum / 10
         let theNum = theNum % 10
 
-        let result = <SID>AddWithSpace( result, tens[ digit ] )
+        let result = <SID>AddWithSpace( result, s:tens[ digit ] )
 
         if ( theNum > 0 )
-          let result = <SID>AddWithSpace( result, digits[ theNum ] )
+          let result = <SID>AddWithSpace( result, s:digits[ theNum ] )
         endif
       endif
     endif
@@ -99,8 +117,6 @@ endfunction
 function! NumberToEnglish( num, ... )
   let theNum     = a:num
   let capitalize = exists( "a:1" ) && a:1
-
-  let scale = [ "", "thousand", "million", "billion" ]
 
   let result = ""
 
@@ -120,7 +136,7 @@ function! NumberToEnglish( num, ... )
     " If someone wants billions, the process just gets repeated one
     " more time.
     let i = 0
-    while ( i < len( scale ) )
+    while ( i < len( s:scale ) )
       let triplet = theNum % 1000
       let theNum  = theNum / 1000
 
@@ -128,8 +144,8 @@ function! NumberToEnglish( num, ... )
       if ( triplet > 0 )
         let tripletToEnglish = SmallNumberToEnglish( triplet )
 
-        if ( scale[ i ] != '' )
-          let tripletToEnglish .= " " . scale[ i ]
+        if ( s:scale[ i ] != '' )
+          let tripletToEnglish .= " " . s:scale[ i ]
         endif
 
         let result = <SID>AddWithSpace( tripletToEnglish, result )
