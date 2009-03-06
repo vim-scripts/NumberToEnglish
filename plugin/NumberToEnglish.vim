@@ -1,6 +1,23 @@
 " -*- vim -*-
 " (C) 2009 by Salman Halim, <salmanhalim AT gmail DOT com>
 
+" Version 1.3
+"
+" Made the plugin accept global values for overriding the returned string; useful for changing the language, for example. Place the following in your _vimrc for
+" French:
+"
+" let g:numberToEnglish_digits = [ "", "un",   "deux",  "trois",  "quatre",   "cinq",      "six",      "sept",         "huit",         "neuf" ]
+" let g:numberToEnglish_teens  = [ "", "onze", "douze", "treize", "quatorze", "quinze",    "seize",    "dix-sept",     "dix-huit",     "dix-neuf" ]
+" let g:numberToEnglish_tens   = [ "", "dix",  "vingt", "trente", "quarante", "cinquante", "soixante", "soixante dix", "quatre vingt", "quatre vingt dix" ]
+"
+" let g:numberToEnglish_scale = [ "", "mille", "million", "billion" ]
+"
+" let g:numberToEnglish_hundred = "cent"
+"
+" This change necessitates the use of GetVar (http://vim.sourceforge.net/scripts/script.php?script_id=353). Technically, the usage of GetVar allows the setting
+" of any combination of these variables on a per-window, buffer or tab level (allowing different languages, capitalizations, etc., depending upon the buffer
+" type, for example).
+"
 " Version 1.2
 "
 " Added two new mappings:
@@ -35,6 +52,28 @@
 " imap <leader>ne <Plug>NumberToEnglish
 " imap <leader>nE <Plug>CNumberToEnglish
 
+" Only set up these variables if their corresponding versions don't already exist (in _vimrc, for example).
+if ( !exists( "g:numberToEnglish_digits" ) )
+  let g:numberToEnglish_digits = [ "", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine" ]
+endif
+
+if ( !exists( "g:numberToEnglish_teens" ) )
+  let g:numberToEnglish_teens = [ "", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen" ]
+endif
+
+if ( !exists( "g:numberToEnglish_tens" ) )
+  let g:numberToEnglish_tens = [ "", "ten", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety" ]
+endif
+
+if ( !exists( "g:numberToEnglish_scale" ) )
+  let g:numberToEnglish_scale = [ "", "thousand", "million", "billion" ]
+endif
+
+if ( !exists( "g:numberToEnglish_hundred" ) )
+  let g:numberToEnglish_hundred = "hundred"
+endif
+
+" Mappings
 imap <Plug>NumberToEnglish <c-o>diw<c-r>=NumberToEnglish( '<c-r>*' )<cr>
 imap <Plug>DNumberToEnglish <c-o>diw<c-r>=NumberToEnglish( '<c-r>*' )<cr> (<c-r>*)
 imap <Plug>CNumberToEnglish <c-o>diw<c-r>=NumberToEnglish( '<c-r>*', 1 )<cr>
@@ -61,12 +100,6 @@ function! <SID>AddWithSpace( original, addition )
   return result
 endfunction
 
-let s:digits = [ "", "one",    "two",    "three",    "four",     "five",    "six",     "seven",     "eight",    "nine" ]
-let s:teens  = [ "", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen" ]
-let s:tens   = [ "", "ten",    "twenty", "thirty",   "forty",    "fifty",   "sixty",   "seventy",   "eighty",   "ninety" ]
-
-let s:scale = [ "", "thousand", "million", "billion" ]
-
 " Converts a number between 1 and 999 to its English equivalent.
 " Anything else (such as 0 or 1000) gets the empty string.
 function! SmallNumberToEnglish( num )
@@ -77,10 +110,14 @@ function! SmallNumberToEnglish( num )
   let result = ""
 
   if ( theNum >= 1 || theNum < 1000 )
+    let digitsList = GetVar( "numberToEnglish_digits" )
+    let teensList  = GetVar( "numberToEnglish_teens" )
+    let tensList   = GetVar( "numberToEnglish_tens" )
+
     let digit = theNum / 100
 
     if ( digit > 0 )
-      let result = <SID>AddWithSpace( result, s:digits[ digit ] . " hundred" )
+      let result = <SID>AddWithSpace( result, digitsList[ digit ] . " " . GetVar( "numberToEnglish_hundred" ) )
     endif
 
     let theNum = theNum % 100
@@ -90,19 +127,19 @@ function! SmallNumberToEnglish( num )
     if ( theNum > 0 )
       if ( theNum < 10 )
         " Single digit
-        let result = <SID>AddWithSpace( result, s:digits[ theNum ] )
+        let result = <SID>AddWithSpace( result, digitsList[ theNum ] )
       elseif ( theNum > 10 && theNum < 20 )
         " Teens
-        let result = <SID>AddWithSpace( result, s:teens[ theNum - 10 ] )
+        let result = <SID>AddWithSpace( result, teensList[ theNum - 10 ] )
       else
         " Regular two-digit number; either 10 or between 20 and 99.
         let digit = theNum / 10
         let theNum = theNum % 10
 
-        let result = <SID>AddWithSpace( result, s:tens[ digit ] )
+        let result = <SID>AddWithSpace( result, tensList[ digit ] )
 
         if ( theNum > 0 )
-          let result = <SID>AddWithSpace( result, s:digits[ theNum ] )
+          let result = <SID>AddWithSpace( result, digitsList[ theNum ] )
         endif
       endif
     endif
@@ -129,6 +166,8 @@ function! NumberToEnglish( num, ... )
       let theNum = abs( theNum )
     endif
 
+    let scaleList = GetVar( "numberToEnglish_scale" )
+
     " Starting from the right, take at most three digits from the
     " number and process those; the first time around, we leave
     " them as is.  The second time, we put the word "thousand"
@@ -136,7 +175,7 @@ function! NumberToEnglish( num, ... )
     " If someone wants billions, the process just gets repeated one
     " more time.
     let i = 0
-    while ( i < len( s:scale ) )
+    while ( i < len( scaleList ) )
       let triplet = theNum % 1000
       let theNum  = theNum / 1000
 
@@ -144,8 +183,8 @@ function! NumberToEnglish( num, ... )
       if ( triplet > 0 )
         let tripletToEnglish = SmallNumberToEnglish( triplet )
 
-        if ( s:scale[ i ] != '' )
-          let tripletToEnglish .= " " . s:scale[ i ]
+        if ( scaleList[ i ] != '' )
+          let tripletToEnglish .= " " . scaleList[ i ]
         endif
 
         let result = <SID>AddWithSpace( tripletToEnglish, result )
