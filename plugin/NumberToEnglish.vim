@@ -1,6 +1,18 @@
 " -*- vim -*-
 " (C) 2009 by Salman Halim, <salmanhalim AT gmail DOT com>
 
+" Version 1.4
+"
+" Added an option to put in the word "and" (nine hundred AND twenty); off by default to retain old behavior:
+"
+" let g:numberToEnglish_useAnd = 1
+"
+" Added another configuration variable (French, in this example):
+"
+" let g:numberToEnglish_and = "et"
+"
+" Sections are now separated by commas; for example, "12345" becomes "twelve thousand, three hundred and forty five"
+"
 " Version 1.3
 "
 " Made the plugin accept global values for overriding the returned string; useful for changing the language, for example. Place the following in your _vimrc for
@@ -73,6 +85,14 @@ if ( !exists( "g:numberToEnglish_hundred" ) )
   let g:numberToEnglish_hundred = "hundred"
 endif
 
+if ( !exists( "g:numberToEnglish_and" ) )
+  let g:numberToEnglish_and = "and"
+endif
+
+if ( !exists( "g:numberToEnglish_useAnd" ) )
+  let g:numberToEnglish_useAnd = 0
+endif
+
 " Mappings
 imap <Plug>NumberToEnglish <c-o>diw<c-r>=NumberToEnglish( '<c-r>*' )<cr>
 imap <Plug>DNumberToEnglish <c-o>diw<c-r>=NumberToEnglish( '<c-r>*' )<cr> (<c-r>*)
@@ -82,10 +102,12 @@ imap <Plug>DCNumberToEnglish <c-o>diw<c-r>=NumberToEnglish( '<c-r>*', 1 )<cr> (<
 " Concatenates two strings, placing a space between them if neither is
 " empty; if either is empty, the result is simply the non-empty one; if
 " both are empty, returns the empty string.
-function! <SID>AddWithSpace( original, addition )
+function! <SID>AddWithSpace( original, addition, ... )
   let result        = ""
   let originalEmpty = a:original == ''
   let additionEmpty = a:addition == ''
+
+  let separator = exists( "a:1" ) ? a:1 : " "
 
   if ( originalEmpty && additionEmpty )
     let result = ""
@@ -94,20 +116,28 @@ function! <SID>AddWithSpace( original, addition )
   elseif ( additionEmpty )
     let result = a:original
   else
-    let result = a:original . " " . a:addition
+    let result = a:original . separator . a:addition
   endif
 
   return result
 endfunction
 
+function! <SID>GetAndSeparator()
+  return GetVar( "numberToEnglish_useAnd" ) ? " " . GetVar( "numberToEnglish_and" ) . " " : " "
+endfunction
+
 " Converts a number between 1 and 999 to its English equivalent.
 " Anything else (such as 0 or 1000) gets the empty string.
-function! SmallNumberToEnglish( num )
+"
+" If standalone is 1, assumes that numbers such as 23 should be returned as "twenty three"; otherwise, 23 gets returned as "and twenty three", if
+" g:numberToEnglish_useAnd is set.
+function! SmallNumberToEnglish( num, standalone )
   " We ignore the 0-based position so we don't have to keep
   " subtracting from our results when we look a number up here.
   let theNum = a:num
 
-  let result = ""
+  " If not standalone, we start with a space to allow for "and" and separators to come into play--we'll trim that out at the end.
+  let result = GetVar( "numberToEnglish_useAnd" ) && !a:standalone ? " " : ""
 
   if ( theNum >= 1 || theNum < 1000 )
     let digitsList = GetVar( "numberToEnglish_digits" )
@@ -127,16 +157,16 @@ function! SmallNumberToEnglish( num )
     if ( theNum > 0 )
       if ( theNum < 10 )
         " Single digit
-        let result = <SID>AddWithSpace( result, digitsList[ theNum ] )
+        let result = <SID>AddWithSpace( result, digitsList[ theNum ], <SID>GetAndSeparator() )
       elseif ( theNum > 10 && theNum < 20 )
         " Teens
-        let result = <SID>AddWithSpace( result, teensList[ theNum - 10 ] )
+        let result = <SID>AddWithSpace( result, teensList[ theNum - 10 ], <SID>GetAndSeparator() )
       else
         " Regular two-digit number; either 10 or between 20 and 99.
         let digit = theNum / 10
         let theNum = theNum % 10
 
-        let result = <SID>AddWithSpace( result, tensList[ digit ] )
+        let result = <SID>AddWithSpace( result, tensList[ digit ], <SID>GetAndSeparator() )
 
         if ( theNum > 0 )
           let result = <SID>AddWithSpace( result, digitsList[ theNum ] )
@@ -145,7 +175,8 @@ function! SmallNumberToEnglish( num )
     endif
   endif
 
-  return result
+  " Trim initial spaces, if we put any in for the "and" work.
+  return substitute( result, '^\s\+', '', '' )
 endfunction
 
 " Converts the given integer (negatives are allowed) to its English
@@ -181,13 +212,13 @@ function! NumberToEnglish( num, ... )
 
       " Skip any empty portions, such as for 1000 or 1000234.
       if ( triplet > 0 )
-        let tripletToEnglish = SmallNumberToEnglish( triplet )
+        let tripletToEnglish = SmallNumberToEnglish( triplet, theNum == 0 )
 
         if ( scaleList[ i ] != '' )
           let tripletToEnglish .= " " . scaleList[ i ]
         endif
 
-        let result = <SID>AddWithSpace( tripletToEnglish, result )
+        let result = <SID>AddWithSpace( tripletToEnglish, result, ", " )
       endif
 
       let i += 1
