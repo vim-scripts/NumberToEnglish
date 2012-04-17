@@ -1,6 +1,18 @@
 " -*- vim -*-
 " (C) 2009 by Salman Halim, <salmanhalim AT gmail DOT com>
 
+" Version 1.5
+"
+" Added parallel function and mappings for ordinal numbers ("forty-second"),
+" also configurable via g:numberToEnglish_ordinal_... variables.
+" Made remaining hard-coded words configurable via variables
+" g:numberToEnglish_zero, g:numberToEnglish_negative.
+" Allowed to use hyphen separator for numbers in range 21-99;
+" g:numberToEnglish_useHyphen.
+" Split into plugin and autoload script to minimize footprint.
+" Change default to let g:numberToEnglish_useAnd = 1
+" Fix additional comma in "one thousand, and one".
+"
 " Version 1.4
 "
 " Added an option to put in the word "and" (nine hundred AND twenty); off by default to retain old behavior:
@@ -68,21 +80,43 @@
 if ( !exists( "g:numberToEnglish_digits" ) )
   let g:numberToEnglish_digits = [ "", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine" ]
 endif
+if ( !exists( "g:numberToEnglish_ordinal_digits" ) )
+  let g:numberToEnglish_ordinal_digits = [ "", "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth" ]
+endif
 
 if ( !exists( "g:numberToEnglish_teens" ) )
   let g:numberToEnglish_teens = [ "", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen" ]
+endif
+if ( !exists( "g:numberToEnglish_ordinal_teens" ) )
+  let g:numberToEnglish_ordinal_teens = [ "", "eleventh", "twelfth", "thirteenth", "fourteenth", "fifteenth", "sixteenth", "seventeenth", "eighteenth", "nineteenth" ]
 endif
 
 if ( !exists( "g:numberToEnglish_tens" ) )
   let g:numberToEnglish_tens = [ "", "ten", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety" ]
 endif
+if ( !exists( "g:numberToEnglish_ordinal_tens" ) )
+  let g:numberToEnglish_ordinal_tens = [ "", "tenth", "twentieth", "thirtieth", "fortieth", "fiftieth", "sixtieth", "seventieth", "eightieth", "ninetieth" ]
+endif
 
 if ( !exists( "g:numberToEnglish_scale" ) )
   let g:numberToEnglish_scale = [ "", "thousand", "million", "billion" ]
 endif
+if ( !exists( "g:numberToEnglish_ordinal_scale" ) )
+  let g:numberToEnglish_ordinal_scale = [ "", "thousandth", "millionth", "billionth" ]
+endif
 
 if ( !exists( "g:numberToEnglish_hundred" ) )
   let g:numberToEnglish_hundred = "hundred"
+endif
+if ( !exists( "g:numberToEnglish_ordinal_hundred" ) )
+  let g:numberToEnglish_ordinal_hundred = "hundredth"
+endif
+
+if ( !exists( "g:numberToEnglish_zero" ) )
+  let g:numberToEnglish_zero = "zero"
+endif
+if ( !exists( "g:numberToEnglish_ordinal_zero" ) )
+  let g:numberToEnglish_ordinal_zero = "zeroth"
 endif
 
 if ( !exists( "g:numberToEnglish_and" ) )
@@ -90,148 +124,24 @@ if ( !exists( "g:numberToEnglish_and" ) )
 endif
 
 if ( !exists( "g:numberToEnglish_useAnd" ) )
-  let g:numberToEnglish_useAnd = 0
+  let g:numberToEnglish_useAnd = 1
+endif
+
+if ( !exists( "g:numberToEnglish_useHyphen" ) )
+  let g:numberToEnglish_useHyphen = 1
+endif
+
+if ( !exists( "g:numberToEnglish_negative" ) )
+  let g:numberToEnglish_negative = "negative"
 endif
 
 " Mappings
-imap <Plug>NumberToEnglish <c-o>diw<c-r>=NumberToEnglish( '<c-r>*' )<cr>
-imap <Plug>DNumberToEnglish <c-o>diw<c-r>=NumberToEnglish( '<c-r>*' )<cr> (<c-r>*)
-imap <Plug>CNumberToEnglish <c-o>diw<c-r>=NumberToEnglish( '<c-r>*', 1 )<cr>
-imap <Plug>DCNumberToEnglish <c-o>diw<c-r>=NumberToEnglish( '<c-r>*', 1 )<cr> (<c-r>*)
+imap <Plug>NumberToEnglish <c-o>diw<c-r>=NumberToEnglish#Cardinal( '<c-r>*' )<cr>
+imap <Plug>DNumberToEnglish <c-o>diw<c-r>=NumberToEnglish#Cardinal( '<c-r>*' )<cr> (<c-r>*)
+imap <Plug>CNumberToEnglish <c-o>diw<c-r>=NumberToEnglish#Cardinal( '<c-r>*', 1 )<cr>
+imap <Plug>DCNumberToEnglish <c-o>diw<c-r>=NumberToEnglish#Cardinal( '<c-r>*', 1 )<cr> (<c-r>*)
 
-" Concatenates two strings, placing a space between them if neither is
-" empty; if either is empty, the result is simply the non-empty one; if
-" both are empty, returns the empty string.
-function! <SID>AddWithSpace( original, addition, ... )
-  let result        = ""
-  let originalEmpty = a:original == ''
-  let additionEmpty = a:addition == ''
-
-  let separator = exists( "a:1" ) ? a:1 : " "
-
-  if ( originalEmpty && additionEmpty )
-    let result = ""
-  elseif ( originalEmpty )
-    let result = a:addition
-  elseif ( additionEmpty )
-    let result = a:original
-  else
-    let result = a:original . separator . a:addition
-  endif
-
-  return result
-endfunction
-
-function! <SID>GetAndSeparator()
-  return GetVar( "numberToEnglish_useAnd" ) ? " " . GetVar( "numberToEnglish_and" ) . " " : " "
-endfunction
-
-" Converts a number between 1 and 999 to its English equivalent.
-" Anything else (such as 0 or 1000) gets the empty string.
-"
-" If standalone is 1, assumes that numbers such as 23 should be returned as "twenty three"; otherwise, 23 gets returned as "and twenty three", if
-" g:numberToEnglish_useAnd is set.
-function! SmallNumberToEnglish( num, standalone )
-  " We ignore the 0-based position so we don't have to keep
-  " subtracting from our results when we look a number up here.
-  let theNum = a:num
-
-  " If not standalone, we start with a space to allow for "and" and separators to come into play--we'll trim that out at the end.
-  let result = GetVar( "numberToEnglish_useAnd" ) && !a:standalone ? " " : ""
-
-  if ( theNum >= 1 || theNum < 1000 )
-    let digitsList = GetVar( "numberToEnglish_digits" )
-    let teensList  = GetVar( "numberToEnglish_teens" )
-    let tensList   = GetVar( "numberToEnglish_tens" )
-
-    let digit = theNum / 100
-
-    if ( digit > 0 )
-      let result = <SID>AddWithSpace( result, digitsList[ digit ] . " " . GetVar( "numberToEnglish_hundred" ) )
-    endif
-
-    let theNum = theNum % 100
-
-    " We can skip the whole thing if the number passed in is an
-    " even multiple of a hundred, such as 500.
-    if ( theNum > 0 )
-      if ( theNum < 10 )
-        " Single digit
-        let result = <SID>AddWithSpace( result, digitsList[ theNum ], <SID>GetAndSeparator() )
-      elseif ( theNum > 10 && theNum < 20 )
-        " Teens
-        let result = <SID>AddWithSpace( result, teensList[ theNum - 10 ], <SID>GetAndSeparator() )
-      else
-        " Regular two-digit number; either 10 or between 20 and 99.
-        let digit = theNum / 10
-        let theNum = theNum % 10
-
-        let result = <SID>AddWithSpace( result, tensList[ digit ], <SID>GetAndSeparator() )
-
-        if ( theNum > 0 )
-          let result = <SID>AddWithSpace( result, digitsList[ theNum ] )
-        endif
-      endif
-    endif
-  endif
-
-  " Trim initial spaces, if we put any in for the "and" work.
-  return substitute( result, '^\s\+', '', '' )
-endfunction
-
-" Converts the given integer (negatives are allowed) to its English
-" equivalent; for example, numberToEnglish( -234 ) returns "negative
-" two hundred thirty four".
-function! NumberToEnglish( num, ... )
-  let theNum     = a:num
-  let capitalize = exists( "a:1" ) && a:1
-
-  let result = ""
-
-  if ( theNum == 0 )
-    let result = "zero"
-  else
-    let isNegative = theNum < 0
-
-    if ( isNegative )
-      let theNum = abs( theNum )
-    endif
-
-    let scaleList = GetVar( "numberToEnglish_scale" )
-
-    " Starting from the right, take at most three digits from the
-    " number and process those; the first time around, we leave
-    " them as is.  The second time, we put the word "thousand"
-    " after them; the word "million" gets appended the third time.
-    " If someone wants billions, the process just gets repeated one
-    " more time.
-    let i = 0
-    while ( i < len( scaleList ) )
-      let triplet = theNum % 1000
-      let theNum  = theNum / 1000
-
-      " Skip any empty portions, such as for 1000 or 1000234.
-      if ( triplet > 0 )
-        let tripletToEnglish = SmallNumberToEnglish( triplet, theNum == 0 )
-
-        if ( scaleList[ i ] != '' )
-          let tripletToEnglish .= " " . scaleList[ i ]
-        endif
-
-        let result = <SID>AddWithSpace( tripletToEnglish, result, ", " )
-      endif
-
-      let i += 1
-    endwhile
-
-    if ( isNegative )
-      let result = "negative " . result
-    endif
-  endif
-
-  if ( capitalize )
-    let result = toupper( result[ 0 ] ) . substitute( result, '.', '', '' )
-  endif
-
-  return result
-endfunction
+imap <Plug>OrdinalToEnglish <c-o>diw<c-r>=NumberToEnglish#Ordinal( '<c-r>*' )<cr>
+imap <Plug>DOrdinalToEnglish <c-o>diw<c-r>=NumberToEnglish#Ordinal( '<c-r>*' )<cr> (<c-r>*)
+imap <Plug>COrdinalToEnglish <c-o>diw<c-r>=NumberToEnglish#Ordinal( '<c-r>*', 1 )<cr>
+imap <Plug>DCOrdinalToEnglish <c-o>diw<c-r>=NumberToEnglish#Ordinal( '<c-r>*', 1 )<cr> (<c-r>*)
